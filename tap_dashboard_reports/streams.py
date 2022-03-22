@@ -1,5 +1,6 @@
 import json
 import requests
+from datetime import date
 from singer_sdk import typing as th
 from singer_sdk import Stream
 
@@ -8,6 +9,7 @@ class ReportStream(Stream):
     def __init__(self, tap=None, report=None):
         self.report = report
         self.query = self._load_query()
+
         self.dimensions = list(
             map(lambda v: v["dimension"].lower(), self.query["variables"]["groupBy"])
         )
@@ -40,6 +42,15 @@ class ReportStream(Stream):
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
 
+    def get_records(self, context):
+        columns = self.dimensions + self.measures
+        data = self._send_request()
+
+        for row in data["analytics"]["richStats"]["stats"]:
+            values = list(map(lambda x: x["value"], row))
+            record = dict(zip(iter(columns), iter(values)))
+            yield record
+
     def _load_query(self):
         with open(self.report["query"]) as f:
             return json.load(f)
@@ -51,18 +62,18 @@ class ReportStream(Stream):
             "Accept": "text/plain",
         }
 
+        if self.config.get("start_date"):
+            self.query["variables"]["dateFilters"][0]["from"] = self.config.get(
+                "start_date"
+            )
+
+        self.query["variables"]["dateFilters"][0]["to"] = date.today().strftime(
+            "%Y-%m-%d"
+        )
+
         auth_response = requests.post(
             self.config.get("api_url"), headers=headers, data=json.dumps(self.query)
         )
 
         response = auth_response.json()
         return response["data"]
-
-    def get_records(self, context):
-        columns = self.dimensions + self.measures
-        data = self._send_request()
-
-        for row in data["analytics"]["richStats"]["stats"]:
-            values = list(map(lambda x: x["value"], row))
-            record = dict(zip(iter(columns), iter(values)))
-            yield record
