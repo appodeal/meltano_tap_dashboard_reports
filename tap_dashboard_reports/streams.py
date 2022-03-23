@@ -1,3 +1,4 @@
+import os
 import json
 import requests
 from datetime import date
@@ -28,6 +29,14 @@ class ReportStream(Stream):
         """Return primary key dynamically based on user inputs."""
         return self.report.get("key_properties") or self.dimensions
 
+    # @property
+    # def replication_key(self):
+    #     """Return replication key dynamically based on user inputs."""
+    #     result = self.config.get("replication_key")
+    #     if not result:
+    #         self.logger.warning("Danger: could not find replication key!")
+    #     return result
+
     @property
     def schema(self) -> dict:
         """Dynamically detect the json schema for the stream.
@@ -56,8 +65,11 @@ class ReportStream(Stream):
             return json.load(f)
 
     def _send_request(self):
+        token = self.config.get('auth_token') or os.environ.get('TAP_DASHBOARD_REPORTS_AUTH_TOKEN')
+        url = self.config.get('api_url') or os.environ.get('TAP_DASHBOARD_REPORTS_API_URL')
+
         headers = {
-            "Authorization": f"Bearer {self.config.get('auth_token')}",
+            "Authorization": f"Bearer {token}",
             "Content-type": "application/json",
             "Accept": "text/plain",
         }
@@ -72,7 +84,7 @@ class ReportStream(Stream):
         )
 
         auth_response = requests.post(
-            self.config.get("api_url"), headers=headers, data=json.dumps(self.query)
+            url, headers=headers, data=json.dumps(self.query)
         )
 
         response = auth_response.json()

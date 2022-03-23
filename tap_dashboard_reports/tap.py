@@ -1,4 +1,4 @@
-"""MySourceName tap class."""
+"""DashboardReports tap class."""
 
 
 from typing import List
@@ -7,17 +7,17 @@ from singer_sdk import typing as th  # JSON schema typing helpers
 
 from tap_dashboard_reports.streams import ReportStream
 
+
 class TapDashboardReports(Tap):
     """DashboardReports tap class."""
 
     name = "tap-dashboard-reports"
 
-    # TODO: Update this section with the actual config values you expect:
     config_jsonschema = th.PropertiesList(
         th.Property(
             "auth_token",
             th.StringType,
-            required=True,
+            # required=True,
             description="The token to authenticate against the API service",
         ),
         th.Property(
@@ -28,7 +28,7 @@ class TapDashboardReports(Tap):
         th.Property(
             "api_url",
             th.StringType,
-            required=True,
+            # required=True,
             default="https://api.mysample.com",
             description="The url for the API service",
         ),
