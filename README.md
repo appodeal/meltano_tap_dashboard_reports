@@ -4,20 +4,10 @@
 
 Built with the [Meltano Tap SDK](https://sdk.meltano.com) for Singer Taps.
 
-## Installation
-
-### Source Authentication and Authorization
-
-- [ ] `Developer TODO:` If your tap requires special access on the source system, or any special authentication requirements, provide those here.
-
-## Usage
-
-You can easily run `tap-dashboard-reports` by itself or in a pipeline using [Meltano](https://meltano.com/).
-
-
 ### Initialize your Development Environment
 
 ```bash
+pip install poetry
 poetry install
 ```
 
@@ -26,10 +16,6 @@ poetry install
 ```bash
 poetry run tap-dashboard-reports --config ./config.json
 ```
-
-## Developer Resources
-
-- [ ] `Developer TODO:` As a first step, scan the entire project for the text "`TODO:`" and complete any recommended steps, deleting the "TODO" references once completed.
 
 
 ### Create and Run Tests

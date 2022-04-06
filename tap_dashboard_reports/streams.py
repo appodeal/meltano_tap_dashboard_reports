@@ -1,10 +1,15 @@
-import os
 import json
-import requests
-from jinja2 import Environment
-from datetime import date
+
 from singer_sdk import typing as th
 from singer_sdk import Stream
+from tap_dashboard_reports.query import render_query
+from tap_dashboard_reports.client import Client
+from tap_dashboard_reports.period import get_iterator
+from datetime import date
+from datetime import datetime
+from dateutil.parser import parse
+from dateutil import rrule
+from dateutil.relativedelta import relativedelta
 
 
 class ReportStream(Stream):
@@ -14,7 +19,10 @@ class ReportStream(Stream):
         self._query_params = self._fetch_query_params()
 
         self._dimensions = list(
-            map(lambda v: v["dimension"].lower(), self._query_params["variables"]["groupBy"])
+            map(
+                lambda v: v["dimension"].lower(),
+                self._query_params["variables"]["groupBy"],
+            )
         )
         self._measures = list(
             map(lambda v: v["id"].lower(), self._query_params["variables"]["measures"])
@@ -24,12 +32,14 @@ class ReportStream(Stream):
     @property
     def name(self):
         """Return primary key dynamically based on user inputs."""
-        return self._report["stream"]
+        return self._report.get("stream")
 
     @property
     def primary_keys(self):
         """Return primary key dynamically based on user inputs."""
-        return self._report.get("key_properties") or self._dimensions
+        return self._report.get(
+            "key_properties", self._dimensions
+        )  # or self._dimensions
 
     # @property
     # def replication_key(self):
@@ -55,9 +65,9 @@ class ReportStream(Stream):
 
     def get_records(self, context):
         columns = self._dimensions + self._measures
-        data = self._send_request()
+        data = self._fetch_date()
 
-        for row in data["analytics"]["richStats"]["stats"]:
+        for row in data:
             values = list(map(lambda x: x["value"], row))
             record = dict(zip(iter(columns), iter(values)))
             yield record
@@ -69,27 +79,17 @@ class ReportStream(Stream):
     def _fetch_query_params(self):
         return json.loads(self._query_template)
 
-    def _send_request(self):
-        token = self.config.get('auth_token') or os.environ.get('TAP_DASHBOARD_REPORTS_AUTH_TOKEN')
-        url = self.config.get('api_url') or os.environ.get('TAP_DASHBOARD_REPORTS_API_URL')
+    def _fetch_date(self):
+        c = Client(self.config)
+        data = []
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-type": "application/json",
-            "Accept": "text/plain",
-        }
+        for start_date, end_date in get_iterator(self.config, self._report).iterate():
+            query = render_query(
+                self._query_template,
+                start_date=start_date,
+                end_date=end_date,
+            )
 
-        query_template = Environment().from_string(self._query_template)
-        query = query_template.render(
-            start_date=self.config.get("start_date"),
-            end_date=date.today().strftime("%Y-%m-%d"),
-        )
+            data += c.send(query)
 
-        auth_response = requests.post(
-            url,
-            headers=headers,
-            data=query,
-        )
-
-        response = auth_response.json()
-        return response["data"]
+        return data
