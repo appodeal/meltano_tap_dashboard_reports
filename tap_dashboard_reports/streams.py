@@ -5,11 +5,6 @@ from singer_sdk import Stream
 from tap_dashboard_reports.query import render_query
 from tap_dashboard_reports.client import Client
 from tap_dashboard_reports.period import get_iterator
-from datetime import date
-from datetime import datetime
-from dateutil.parser import parse
-from dateutil import rrule
-from dateutil.relativedelta import relativedelta
 
 
 class ReportStream(Stream):
@@ -88,6 +83,7 @@ class ReportStream(Stream):
                 self._query_template,
                 start_date=start_date,
                 end_date=end_date,
+                **self._report.get("vars", {})
             )
 
             data += c.send(query)

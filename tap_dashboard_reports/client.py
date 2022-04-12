@@ -1,4 +1,3 @@
-import os
 import requests
 
 
@@ -14,18 +13,6 @@ class Client:
         }
 
     def send(self, query):
-        # date_from = os.environ.get("TAP_DASHBOARD_REPORTS_DATE_FROM")
-        # date_to = os.environ.get("TAP_DASHBOARD_REPORTS_DATE_TO")
-        # print(f"Date: {date_from} - {date_to} ------------------------------------------")
-
-        # query = render_query(
-        #     self._query_template,
-        #     start_date=self.config.get("start_date"),
-        #     end_date=datetime.now(),
-        # )
-
-        # return []
-
         auth_response = requests.post(
             self._url,
             headers=self._headers,
@@ -33,4 +20,8 @@ class Client:
         )
 
         response = auth_response.json()
+
+        if response.get("errors"):
+            raise Exception(response.get("errors"))
+
         return response["data"]["analytics"]["richStats"]["stats"]
