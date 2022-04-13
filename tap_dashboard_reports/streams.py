@@ -63,7 +63,7 @@ class ReportStream(Stream):
         data = self._fetch_date()
 
         for row in data:
-            values = list(map(lambda x: x["value"], row))
+            values = list(map(lambda x: x.get("value") or x.get("name"), row))
             record = dict(zip(iter(columns), iter(values)))
             yield record
 
