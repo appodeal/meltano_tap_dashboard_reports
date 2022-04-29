@@ -6,7 +6,6 @@ from tap_dashboard_reports.query import render_query
 from tap_dashboard_reports.client import Client
 from tap_dashboard_reports.period import get_iterator
 
-
 class ReportStream(Stream):
     def __init__(self, tap=None, report=None):
         self._report = report
@@ -20,7 +19,7 @@ class ReportStream(Stream):
             )
         )
         self._measures = list(
-            map(lambda v: v["id"].lower(), self._query_params["variables"]["measures"])
+            map(_prepare_field_name, self._query_params["variables"]["measures"])
         )
         super().__init__(tap=tap)
 
@@ -89,3 +88,13 @@ class ReportStream(Stream):
             data += c.send(query)
 
         return data
+
+
+
+def _prepare_field_name(param):
+    name = param["id"].lower()
+
+    if param["day"] is not None:
+        name = f'{name}_{param["day"]}'
+
+    return name
