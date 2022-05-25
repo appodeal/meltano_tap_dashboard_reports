@@ -71,7 +71,12 @@ class ReportStream(Stream):
             return f.read()
 
     def _fetch_query_params(self):
-        return json.loads(self._query_template)
+        query = render_query(
+            self._query_template,
+            **self._report.get("vars", {})
+        )
+
+        return json.loads(query)
 
     def _fetch_date(self):
         c = Client(self.config)

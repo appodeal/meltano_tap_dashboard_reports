@@ -1,6 +1,6 @@
+from datetime import date
 from jinja2 import Environment
 from dateutil.relativedelta import relativedelta
-
 
 def _shift_date(d, interval, period):
     return d + relativedelta(**{interval: period})
@@ -19,6 +19,8 @@ def render_query(template, **variables):
     variables = {
         "shift_date": _shift_date,
         "format_date": _format_date,
+        "start_date": date.today(),
+        "end_date": date.today(),
         **variables,
     }
 
