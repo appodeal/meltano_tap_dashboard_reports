@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from singer_sdk import typing as th
 from singer_sdk import Stream
@@ -59,7 +60,7 @@ class ReportStream(Stream):
 
     def get_records(self, context):
         columns = self._dimensions + self._measures
-        data = self._fetch_date()
+        data = self._fetch_all_reports()
 
         for row in data:
             values = list(map(lambda x: x.get("value") or x.get("name"), row))
@@ -78,22 +79,28 @@ class ReportStream(Stream):
 
         return json.loads(query)
 
-    def _fetch_date(self):
-        c = Client(self.config)
-        data = []
+    def _fetch_all_reports(self):
+        client = Client(self.config)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            tasks = []
+            for start_date, end_date in get_iterator(self.config, self._report).iterate():
+                tasks.append(executor.submit(self._fetch_one_report, client, start_date, end_date))
 
-        for start_date, end_date in get_iterator(self.config, self._report).iterate():
-            query = render_query(
-                self._query_template,
-                start_date=start_date,
-                end_date=end_date,
-                **self._report.get("vars", {})
-            )
-
-            data += c.send(query)
+            data = []
+            for t in tasks:
+                data += t.result()
 
         return data
 
+    def _fetch_one_report(self, client, start_date, end_date):
+        query = render_query(
+            self._query_template,
+            start_date=start_date,
+            end_date=end_date,
+            **self._report.get("vars", {})
+        )
+
+        return client.send(query)
 
 
 def _prepare_field_name(param):
