@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 from jinja2 import Environment
 from dateutil.relativedelta import relativedelta
 
 def _shift_date(d, interval, period):
     return d + relativedelta(**{interval: period})
 
+def _last_sunday(d):
+    return d - timedelta((date.weekday() + 1) % 7)
 
 def _format_date(d):
     try:
