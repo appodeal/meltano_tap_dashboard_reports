@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from singer_sdk import typing as th
 from singer_sdk import Stream
-from tap_dashboard_reports.query import render_query, _format_date
+from tap_dashboard_reports.query import render_query
 from tap_dashboard_reports.client import Client
 from tap_dashboard_reports.period import get_iterator
 
@@ -49,30 +49,24 @@ class ReportStream(Stream):
         """Dynamically detect the json schema for the stream.
         This is evaluated prior to any records being retrieved.
         """
-        if len(self.primary_keys) == 0:
-            properties = [
+        properties = [
             th.Property(field, th.StringType)
             for field in (self._dimensions + self._measures)
         ]
-        else:   
-            properties = [
-                th.Property(field, th.StringType)
-                for field in (self._dimensions + self._measures + [self.primary_keys])
-            ]
-
+        if len(self.primary_keys) != 0:
+            properties.append(th.Property(self.primary_keys, th.StringType))
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
 
     def get_records(self, context):
         columns = self._dimensions + self._measures 
-        data, start_date, end_date = self._fetch_all_reports()
+        if len(self.primary_keys) != 0:
+            columns.append(self.primary_keys)
+        data = self._fetch_all_reports()
         for row in data:
             values = list(map(lambda x: x.get("value") or x.get("name"), row))
             record = dict(zip(iter(columns), iter(values)))
-        result = record
-        if len(self.primary_keys) != 0:
-            result[self.primary_keys] = _format_date(end_date)
-        yield  result       
+            yield  record       
 
     def _load_query_template(self):
         with open(self._report["query"]) as f:
@@ -95,7 +89,7 @@ class ReportStream(Stream):
             data = []
             for t in tasks:
                 data += t.result()
-        return data, start_date, end_date
+        return data
 
     def _fetch_one_report(self, client, start_date, end_date):
         query = render_query(
@@ -104,7 +98,12 @@ class ReportStream(Stream):
             end_date=end_date,
             **self._report.get("vars", {})
         )
-        return client.send(query)
+        result = client.send(query)
+        if len(self.primary_keys) != 0:
+            for data in result:
+                pk = {'id': None, '__typename': self.primary_keys, 'value': end_date.strftime("%Y-%m-%d")}
+                data.append(pk)
+        return result
 
 
 def _prepare_field_name(param):
