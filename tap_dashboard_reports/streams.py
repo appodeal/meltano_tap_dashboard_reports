@@ -12,6 +12,7 @@ class ReportStream(Stream):
         self._report = report
         self._query_template = self._load_query_template()
         self._query_params = self._fetch_query_params()
+        self.custom_key = self._report.get("key_property", None) is not None
 
         self._dimensions = list(
             map(
@@ -31,10 +32,13 @@ class ReportStream(Stream):
 
     @property
     def primary_keys(self):
-        """Return primary key dynamically based on user inputs."""
-        return self._report.get(
-            "key_properties", self._dimensions
-        )  # or self._dimensions
+        """Return primary key dynamically based on user inputs.
+        If in config doesn't have key key_property then take _dimensions
+        """
+        if self.custom_key:
+            return self._report["key_property"]
+        else:
+            return self._dimensions
 
     # @property
     # def replication_key(self):
@@ -53,7 +57,7 @@ class ReportStream(Stream):
             th.Property(field, th.StringType)
             for field in (self._dimensions + self._measures)
         ]
-        if len(self.primary_keys) != 0:
+        if self.custom_key:
             properties.append(th.Property(self.primary_keys, th.StringType))
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
@@ -66,7 +70,7 @@ class ReportStream(Stream):
         for row in data:
             values = list(map(lambda x: x.get("value") or x.get("name"), row))
             record = dict(zip(iter(columns), iter(values)))
-            yield  record       
+            yield record
 
     def _load_query_template(self):
         with open(self._report["query"]) as f:
@@ -99,7 +103,7 @@ class ReportStream(Stream):
             **self._report.get("vars", {})
         )
         result = client.send(query)
-        if len(self.primary_keys) != 0:
+        if self.custom_key:
             for data in result:
                 pk = {'id': None, '__typename': self.primary_keys, 'value': end_date.strftime("%Y-%m-%d")}
                 data.append(pk)
