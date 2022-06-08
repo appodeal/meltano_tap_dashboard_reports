@@ -7,6 +7,7 @@ from tap_dashboard_reports.query import render_query
 from tap_dashboard_reports.client import Client
 from tap_dashboard_reports.period import get_iterator
 
+
 class ReportStream(Stream):
     def __init__(self, tap=None, report=None):
         self._report = report
@@ -63,7 +64,7 @@ class ReportStream(Stream):
         return th.PropertiesList(*properties).to_dict()
 
     def get_records(self, context):
-        columns = self._dimensions + self._measures 
+        columns = self._dimensions + self._measures
         if len(self.primary_keys) != 0:
             columns.append(self.primary_keys)
         data = self._fetch_all_reports()
@@ -77,18 +78,21 @@ class ReportStream(Stream):
             return f.read()
 
     def _fetch_query_params(self):
-        query = render_query(
-            self._query_template,
-            **self._report.get("vars", {})
-        )
+        query = render_query(self._query_template, **self._report.get("vars", {}))
         return json.loads(query)
 
     def _fetch_all_reports(self):
         client = Client(self.config)
         with ThreadPoolExecutor(max_workers=10) as executor:
             tasks = []
-            for start_date, end_date in get_iterator(self.config, self._report).iterate():
-                tasks.append(executor.submit(self._fetch_one_report, client, start_date, end_date))
+            for start_date, end_date in get_iterator(
+                self.config, self._report
+            ).iterate():
+                tasks.append(
+                    executor.submit(
+                        self._fetch_one_report, client, start_date, end_date
+                    )
+                )
 
             data = []
             for t in tasks:
@@ -100,12 +104,16 @@ class ReportStream(Stream):
             self._query_template,
             start_date=start_date,
             end_date=end_date,
-            **self._report.get("vars", {})
+            **self._report.get("vars", {}),
         )
         result = client.send(query)
         if self.custom_key:
             for data in result:
-                pk = {'id': None, '__typename': self.primary_keys, 'value': end_date.strftime("%Y-%m-%d")}
+                pk = {
+                    "id": None,
+                    "__typename": self.primary_keys,
+                    "value": end_date.strftime("%Y-%m-%d"),
+                }
                 data.append(pk)
         return result
 
