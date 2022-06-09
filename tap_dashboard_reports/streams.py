@@ -13,7 +13,7 @@ class ReportStream(Stream):
         self._report = report
         self._query_template = self._load_query_template()
         self._query_params = self._fetch_query_params()
-        self.custom_key = self._report.get("key_property", None) is not None
+        self._custom_key = self._report.get("key_property", None)
 
         self._dimensions = list(
             map(
@@ -36,10 +36,10 @@ class ReportStream(Stream):
         """Return primary key dynamically based on user inputs.
         If in config doesn't have key key_property then take _dimensions
         """
-        if self.custom_key:
-            return self._report["key_property"]
-        else:
+        if self._custom_key is None:
             return self._dimensions
+        else:
+            return [self._custom_key, *self._dimensions]
 
     # @property
     # def replication_key(self):
@@ -58,15 +58,15 @@ class ReportStream(Stream):
             th.Property(field, th.StringType)
             for field in (self._dimensions + self._measures)
         ]
-        if self.custom_key:
-            properties.append(th.Property(self.primary_keys, th.StringType))
+        if self._custom_key is not None:
+            properties.append(th.Property(self._custom_key, th.StringType))
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
 
     def get_records(self, context):
         columns = self._dimensions + self._measures
-        if self.custom_key:
-            columns.append(self.primary_keys)
+        if self._custom_key is not None:
+            columns.append(self._custom_key)
         data = self._fetch_all_reports()
         for row in data:
             values = list(map(lambda x: x.get("value") or x.get("name"), row))
@@ -107,11 +107,11 @@ class ReportStream(Stream):
             **self._report.get("vars", {}),
         )
         result = client.send(query)
-        if self.custom_key:
+        if self._custom_key is not None:
             for data in result:
                 pk = {
                     "id": None,
-                    "__typename": self.primary_keys,
+                    "__typename": self._custom_key,
                     "value": end_date.strftime("%Y-%m-%d"),
                 }
                 data.append(pk)
