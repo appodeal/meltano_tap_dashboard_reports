@@ -65,7 +65,7 @@ class ReportStream(Stream):
 
     def get_records(self, context):
         columns = self._dimensions + self._measures
-        if len(self.primary_keys) != 0:
+        if self.custom_key:
             columns.append(self.primary_keys)
         data = self._fetch_all_reports()
         for row in data:
