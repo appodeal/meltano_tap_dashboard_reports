@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from datetime import datetime
 from dateutil.parser import parse
 from dateutil import rrule
@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 def get_iterator(config, report_config):
     iter_class = {
         "month": PeriodMonth,
+        "week": PeriodWeek,
         "day": PeriodDay,
     }.get(report_config.get("interval"), PeriodDefault)
 
@@ -50,6 +51,28 @@ class PeriodDay(PeriodDefault):
         return self._end_date - relativedelta(days=self._periods)
 
 
+class PeriodWeek(PeriodDefault):
+    def iterate(self):
+        cursor = self._start_date
+        while cursor < self._end_date:
+            interval_start = first_day_of_week(cursor)
+            interval_start = (
+                self._start_date
+                if interval_start < self._start_date
+                else interval_start
+            )
+            interval_end = last_day_of_week(cursor)
+            interval_end = (
+                self._end_date if interval_end > self._end_date else interval_end
+            )
+            yield (interval_start, interval_end)
+
+            cursor = first_day_of_week(cursor + relativedelta(weeks=1))
+
+    def _calculate_start_date(self):
+        return first_day_of_week(self._end_date - relativedelta(weeks=self._periods))
+
+
 class PeriodMonth(PeriodDefault):
     def iterate(self):
         cursor = self._start_date
@@ -78,3 +101,11 @@ def last_day_of_month(dt):
 
 def first_day_of_month(dt):
     return dt.replace(day=1)
+
+
+def last_day_of_week(dt):
+    return dt - timedelta(days=dt.weekday()) + relativedelta(weeks=1)
+
+
+def first_day_of_week(dt):
+    return dt - timedelta(days=dt.weekday())
