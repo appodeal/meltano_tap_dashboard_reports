@@ -55,22 +55,22 @@ class PeriodWeek(PeriodDefault):
     def iterate(self):
         cursor = self._start_date
         while cursor < self._end_date:
-            interval_start = first_day_of_week(cursor)
+            interval_start = cursor
             interval_start = (
                 self._start_date
                 if interval_start < self._start_date
                 else interval_start
             )
-            interval_end = last_day_of_week(cursor)
+            interval_end = previous_day_of_week(cursor)
             interval_end = (
                 self._end_date if interval_end > self._end_date else interval_end
             )
             yield (interval_start, interval_end)
 
-            cursor = first_day_of_week(cursor + relativedelta(weeks=1))
+            cursor = cursor + relativedelta(weeks=1)
 
     def _calculate_start_date(self):
-        return first_day_of_week(self._end_date - relativedelta(weeks=self._periods))
+        return self._end_date - relativedelta(weeks=self._periods)
 
 
 class PeriodMonth(PeriodDefault):
@@ -103,9 +103,6 @@ def first_day_of_month(dt):
     return dt.replace(day=1)
 
 
-def last_day_of_week(dt):
-    return dt - timedelta(days=dt.weekday()) + relativedelta(weeks=1)
+def previous_day_of_week(dt):
+    return dt + relativedelta(weeks=1)
 
-
-def first_day_of_week(dt):
-    return dt - timedelta(days=dt.weekday())
