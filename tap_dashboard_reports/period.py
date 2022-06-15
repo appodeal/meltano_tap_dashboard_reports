@@ -66,7 +66,7 @@ class PeriodWeek(PeriodDefault):
                 self._end_date if interval_end > self._end_date else interval_end
             )
             yield (interval_start, interval_end)
-
+            
             cursor = first_day_of_week(cursor + relativedelta(weeks=1))
 
     def _calculate_start_date(self):
@@ -104,7 +104,7 @@ def first_day_of_month(dt):
 
 
 def last_day_of_week(dt):
-    return dt - timedelta(days=dt.weekday()) + relativedelta(weeks=1)
+    return dt - timedelta(days=dt.weekday()) + relativedelta(weeks=1) - relativedelta(days=1)
 
 
 def first_day_of_week(dt):
