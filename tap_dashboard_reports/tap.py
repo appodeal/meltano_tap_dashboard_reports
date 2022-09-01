@@ -48,10 +48,7 @@ class TapDashboardReports(Tap):
             if os.environ.get(v):
                 self._config[k] = os.environ.get(v)
 
-        return [
-            ReportStream(tap=self, report=report)
-            for report in self._reports()
-        ]
+        return [ReportStream(tap=self, report=report) for report in self._reports()]
 
     def _reports(self):
         select = self.config.get("select")
