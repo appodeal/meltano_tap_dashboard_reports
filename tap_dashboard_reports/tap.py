@@ -13,6 +13,7 @@ CONFIG_VARS = {
     "default_start_date": "TAP_DASHBOARD_REPORTS_DEFAULT_START_DATE",
     "start_date": "TAP_DASHBOARD_REPORTS_START_DATE",
     "end_date": "TAP_DASHBOARD_REPORTS_END_DATE",
+    "select": "TAP_DASHBOARD_REPORTS__SELECT_FILTER",
 }
 
 
@@ -49,8 +50,22 @@ class TapDashboardReports(Tap):
 
         return [
             ReportStream(tap=self, report=report)
-            for report in self.config.get("reports")
+            for report in self._reports()
         ]
+
+    def _reports(self):
+        select = self.config.get("select")
+        all_reports = self.config.get("reports")
+
+        if select == "[]" or select == '[""]':
+            return all_reports
+
+        return list(
+            filter(
+                lambda r: (r["stream"] in select),
+                all_reports,
+            )
+        )
 
 
 cli = TapDashboardReports.cli
