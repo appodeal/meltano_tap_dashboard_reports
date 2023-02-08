@@ -14,6 +14,7 @@ class ReportStream(Stream):
         self._query_template = self._load_query_template()
         self._query_params = self._fetch_query_params()
         self._custom_key = self._report.get("key_property", None)
+        self._take_ids = self._report.get("take_ids", [])
 
         self._dimensions = list(
             map(
@@ -54,10 +55,16 @@ class ReportStream(Stream):
         """Dynamically detect the json schema for the stream.
         This is evaluated prior to any records being retrieved.
         """
-        properties = [
-            th.Property(field, th.StringType)
-            for field in (self._dimensions + self._measures)
-        ]
+        properties = []
+
+        # if field in take_ids - this is meant that this column should be integer
+        # and from response we will take id value
+        for field in (self._dimensions + self._measures):
+            if field in self._take_ids:
+                properties.append(th.Property(field, th.IntegerType))
+            else:
+                properties.append(th.Property(field, th.StringType))
+
         if self._custom_key is not None:
             properties.append(th.Property(self._custom_key, th.StringType))
         # Return the list as a JSON Schema dictionary object
@@ -68,8 +75,17 @@ class ReportStream(Stream):
         if self._custom_key is not None:
             columns.append(self._custom_key)
         data = self._fetch_all_reports()
+
+        # indexes of columns that should be taken from id
+        ids_indexes = [columns.index(x) for x in self._take_ids]
+
         for row in data:
-            values = list(map(lambda x: x.get("value") or x.get("name"), row))
+            values = []
+            for cell_index, cell in enumerate(row):
+                if cell_index in ids_indexes:
+                    values.append(cell.get("id"))
+                else:
+                    values.append(cell.get("value") or cell.get("name"))
             record = dict(zip(iter(columns), iter(values)))
             yield record
 
