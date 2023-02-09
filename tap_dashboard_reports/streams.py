@@ -15,18 +15,24 @@ class ReportStream(Stream):
         self._query_params = self._fetch_query_params()
         self._custom_key = self._report.get("key_property", None)
         self._take_ids = self._report.get("take_ids", [])
-        self._columns = []
 
-        self._dimensions = list(
-            map(
-                lambda v: v["dimension"].lower(),
-                self._query_params["variables"]["groupBy"],
-            )
-        )
+        self._dimensions = self._prepare_dimensions()
         self._measures = list(
             map(_prepare_field_name, self._query_params["variables"]["measures"])
         )
         super().__init__(tap=tap)
+
+    def _prepare_dimensions(self):
+        """
+        Prepare dimensions for schema. If in config take_ids is True then add _id to dimension and dimension itself
+        """
+        dimensions = []
+        for dimension in self._query_params["variables"]["groupBy"]:
+            dimension = dimension["dimension"].lower()
+            if dimension in self._take_ids:
+                dimensions.append(f"{dimension}_id")
+            dimensions.append(dimension)
+        return dimensions
 
     @property
     def name(self):
@@ -34,21 +40,21 @@ class ReportStream(Stream):
         return self._report.get("stream")
 
     @property
+    def fields(self):
+        fields = [*self._dimensions, *self._measures]
+        if self._custom_key is not None:
+            fields.append(self._custom_key)
+        return fields
+
+    @property
     def primary_keys(self):
         """Return primary key dynamically based on user inputs.
         If in config doesn't have key key_property then take _dimensions
-        If config has take_ids then we should create primary key for fields + _id postfix
-        which are intersection of _dimensions and take_ids
         """
-        # get fields which are in take_ids and in dimensions and add _id postfix
-        ids_fields = frozenset(self._dimensions).intersection(self._take_ids)
-        ids_fields = list(map(lambda x: f"{x}_id", ids_fields))
 
-        primary_keys = [*self._dimensions, *ids_fields]
         if self._custom_key is not None:
-            primary_keys.append(self._custom_key)
-
-        return primary_keys
+            return [*self._dimensions, self._custom_key]
+        return self._dimensions
 
     # @property
     # def replication_key(self):
@@ -63,24 +69,8 @@ class ReportStream(Stream):
         """Dynamically detect the json schema for the stream.
         This is evaluated prior to any records being retrieved.
         """
-        properties = []
-        columns = []
+        properties = [th.Property(field, th.StringType) for field in self.fields]
 
-        # if field in take_ids - this is meant that this column should be integer
-        # and from response we will take id value
-        for field in (self._dimensions + self._measures):
-            if field in self._take_ids:
-                field_name = f"{field}_id"
-                columns.append(field_name)
-                properties.append(th.Property(field_name, th.IntegerType))
-            columns.append(field)
-            properties.append(th.Property(field, th.StringType))
-
-        if self._custom_key is not None:
-            properties.append(th.Property(self._custom_key, th.StringType))
-            columns.append(self._custom_key)
-
-        self._columns = columns
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
 
@@ -88,7 +78,7 @@ class ReportStream(Stream):
         data = self._fetch_all_reports()
 
         # indexes of columns that should be taken from id
-        ids_indexes = [self._columns.index(f"{x}_id") for x in self._take_ids]
+        ids_indexes = [self.fields.index(f"{x}_id") for x in self._take_ids]
 
         for row in data:
             values = []
@@ -96,7 +86,7 @@ class ReportStream(Stream):
                 if cell_index in ids_indexes:
                     values.append(cell.get("id"))
                 values.append(cell.get("value") or cell.get("name"))
-            record = dict(zip(iter(self._columns), iter(values)))
+            record = dict(zip(iter(self.fields), iter(values)))
             yield record
 
     def _load_query_template(self):
@@ -112,7 +102,7 @@ class ReportStream(Stream):
         with ThreadPoolExecutor(max_workers=10) as executor:
             tasks = []
             for start_date, end_date in get_iterator(
-                self.config, self._report
+                    self.config, self._report
             ).iterate():
                 tasks.append(
                     executor.submit(
