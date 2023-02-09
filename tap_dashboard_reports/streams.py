@@ -37,11 +37,18 @@ class ReportStream(Stream):
     def primary_keys(self):
         """Return primary key dynamically based on user inputs.
         If in config doesn't have key key_property then take _dimensions
+        If config has take_ids then we should create primary key for fields + _id postfix
+        which are intersection of _dimensions and take_ids
         """
-        if self._custom_key is None:
-            return self._dimensions
-        else:
-            return [self._custom_key, *self._dimensions]
+        # get fields which are in take_ids and in dimensions and add _id postfix
+        ids_fields = frozenset(self._dimensions).intersection(self._take_ids)
+        ids_fields = list(map(lambda x: f"{x}_id", ids_fields))
+
+        primary_keys = [*self._dimensions, *ids_fields]
+        if self._custom_key is not None:
+            primary_keys.append(self._custom_key)
+
+        return primary_keys
 
     # @property
     # def replication_key(self):
