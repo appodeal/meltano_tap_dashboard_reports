@@ -15,17 +15,24 @@ class ReportStream(Stream):
         self._query_params = self._fetch_query_params()
         self._custom_key = self._report.get("key_property", None)
         self._take_ids = self._report.get("take_ids", [])
-
-        self._dimensions = self._prepare_dimensions()
+        self._dimensions = list(
+            map(
+                lambda v: v["dimension"].lower(),
+                self._query_params["variables"]["groupBy"],
+            )
+        )
         self._measures = list(
             map(_prepare_field_name, self._query_params["variables"]["measures"])
         )
         super().__init__(tap=tap)
 
-    def _prepare_dimensions(self):
-        """
-        Prepare dimensions for schema. If in config take_ids is True then add _id to dimension and dimension itself
-        """
+    @property
+    def name(self):
+        """Return primary key dynamically based on user inputs."""
+        return self._report.get("stream")
+
+    @property
+    def dimensions_with_ids(self):
         dimensions = []
         for dimension in self._query_params["variables"]["groupBy"]:
             dimension = dimension["dimension"].lower()
@@ -35,9 +42,11 @@ class ReportStream(Stream):
         return dimensions
 
     @property
-    def name(self):
-        """Return primary key dynamically based on user inputs."""
-        return self._report.get("stream")
+    def fields_with_ids(self):
+        fields = [*self.dimensions_with_ids, *self._measures]
+        if self._custom_key is not None:
+            fields.append(self._custom_key)
+        return fields
 
     @property
     def fields(self):
@@ -69,7 +78,7 @@ class ReportStream(Stream):
         """Dynamically detect the json schema for the stream.
         This is evaluated prior to any records being retrieved.
         """
-        properties = [th.Property(field, th.StringType) for field in self.fields]
+        properties = [th.Property(field, th.StringType) for field in self.fields_with_ids]
 
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
@@ -78,7 +87,7 @@ class ReportStream(Stream):
         data = self._fetch_all_reports()
 
         # indexes of columns that should be taken from id
-        ids_indexes = [self.fields.index(f"{x}_id") for x in self._take_ids]
+        ids_indexes = [self.fields.index(x) for x in self._take_ids]
 
         for row in data:
             values = []
@@ -86,7 +95,7 @@ class ReportStream(Stream):
                 if cell_index in ids_indexes:
                     values.append(cell.get("id"))
                 values.append(cell.get("value") or cell.get("name"))
-            record = dict(zip(iter(self.fields), iter(values)))
+            record = dict(zip(iter(self.fields_with_ids), iter(values)))
             yield record
 
     def _load_query_template(self):
