@@ -14,7 +14,7 @@ class ReportStream(Stream):
         self._query_template = self._load_query_template()
         self._query_params = self._fetch_query_params()
         self._custom_key = self._report.get("key_property", None)
-
+        self._take_ids = self._report.get("take_ids", [])
         self._dimensions = list(
             map(
                 lambda v: v["dimension"].lower(),
@@ -32,14 +32,38 @@ class ReportStream(Stream):
         return self._report.get("stream")
 
     @property
+    def dimensions_with_ids(self):
+        dimensions = []
+        for dimension in self._query_params["variables"]["groupBy"]:
+            dimension = dimension["dimension"].lower()
+            if dimension in self._take_ids:
+                dimensions.append(f"{dimension}_id")
+            dimensions.append(dimension)
+        return dimensions
+
+    @property
+    def fields_with_ids(self):
+        fields = [*self.dimensions_with_ids, *self._measures]
+        if self._custom_key is not None:
+            fields.append(self._custom_key)
+        return fields
+
+    @property
+    def fields(self):
+        fields = [*self._dimensions, *self._measures]
+        if self._custom_key is not None:
+            fields.append(self._custom_key)
+        return fields
+
+    @property
     def primary_keys(self):
         """Return primary key dynamically based on user inputs.
         If in config doesn't have key key_property then take _dimensions
         """
-        if self._custom_key is None:
-            return self._dimensions
-        else:
-            return [self._custom_key, *self._dimensions]
+
+        if self._custom_key is not None:
+            return [*self._dimensions, self._custom_key]
+        return self._dimensions
 
     # @property
     # def replication_key(self):
@@ -54,23 +78,24 @@ class ReportStream(Stream):
         """Dynamically detect the json schema for the stream.
         This is evaluated prior to any records being retrieved.
         """
-        properties = [
-            th.Property(field, th.StringType)
-            for field in (self._dimensions + self._measures)
-        ]
-        if self._custom_key is not None:
-            properties.append(th.Property(self._custom_key, th.StringType))
+        properties = [th.Property(field, th.StringType) for field in self.fields_with_ids]
+
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
 
     def get_records(self, context):
-        columns = self._dimensions + self._measures
-        if self._custom_key is not None:
-            columns.append(self._custom_key)
         data = self._fetch_all_reports()
+
+        # indexes of columns that should be taken from id
+        ids_indexes = [self.fields.index(x) for x in self._take_ids]
+
         for row in data:
-            values = list(map(lambda x: x.get("value") or x.get("name"), row))
-            record = dict(zip(iter(columns), iter(values)))
+            values = []
+            for cell_index, cell in enumerate(row):
+                if cell_index in ids_indexes:
+                    values.append(cell.get("id"))
+                values.append(cell.get("value") or cell.get("name"))
+            record = dict(zip(iter(self.fields_with_ids), iter(values)))
             yield record
 
     def _load_query_template(self):
@@ -86,7 +111,7 @@ class ReportStream(Stream):
         with ThreadPoolExecutor(max_workers=10) as executor:
             tasks = []
             for start_date, end_date in get_iterator(
-                self.config, self._report
+                    self.config, self._report
             ).iterate():
                 tasks.append(
                     executor.submit(
