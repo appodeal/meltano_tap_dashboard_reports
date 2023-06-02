@@ -62,8 +62,8 @@ class ReportStream(Stream):
         """
 
         if self._custom_key is not None:
-            return [*self._dimensions, self._custom_key]
-        return self._dimensions
+            return [*self.dimensions_with_ids, self._custom_key]
+        return self.dimensions_with_ids
 
     # @property
     # def replication_key(self):
