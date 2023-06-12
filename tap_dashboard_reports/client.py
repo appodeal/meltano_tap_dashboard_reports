@@ -19,6 +19,16 @@ class Client:
             data=query,
         )
 
+        if auth_response.status_code != 200:
+            auth_response = requests.post(
+                self._url,
+                headers=self._headers,
+                data=query,
+            )
+
+        if auth_response.status_code != 200:
+            raise Exception(f"Error fetching data: {auth_response.text}")
+
         response = auth_response.json()
 
         if response.get("errors"):
