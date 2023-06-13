@@ -12,7 +12,7 @@ class Client:
             "Accept": "text/plain",
         }
 
-    def send(self, query):
+    def send(self, query, attempts=1):
         auth_response = requests.post(
             self._url,
             headers=self._headers,
@@ -20,14 +20,9 @@ class Client:
         )
 
         if auth_response.status_code != 200:
-            auth_response = requests.post(
-                self._url,
-                headers=self._headers,
-                data=query,
-            )
-
-        if auth_response.status_code != 200:
-            raise Exception(f"Error fetching data: {auth_response.text}")
+            if attempts >= 3:
+                raise Exception(f"Error fetching data: {auth_response.text}")
+            return self.send(query, attempts=attempts + 1)
 
         response = auth_response.json()
 
