@@ -108,7 +108,7 @@ class ReportStream(Stream):
 
     def _fetch_all_reports(self):
         client = Client(self.config)
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             tasks = []
             for start_date, end_date in get_iterator(
                     self.config, self._report
