@@ -15,6 +15,7 @@ class ReportStream(Stream):
         self._query_params = self._fetch_query_params()
         self._custom_key = self._report.get("key_property", None)
         self._take_ids = self._report.get("take_ids", [])
+        self._schema = self._report.get("schema", {})
         self._dimensions = list(
             map(
                 lambda v: v["dimension"].lower(),
@@ -78,7 +79,15 @@ class ReportStream(Stream):
         """Dynamically detect the json schema for the stream.
         This is evaluated prior to any records being retrieved.
         """
-        properties = [th.Property(field, th.StringType) for field in self.fields_with_ids]
+        properties = [
+            th.Property(field, th.StringType)
+            for field in self.fields_with_ids
+            if field not in self._schema
+        ]
+
+        properties += [
+            th.Property(field, th.DateTimeType) for field, type in self._schema.items()
+        ]
 
         # Return the list as a JSON Schema dictionary object
         return th.PropertiesList(*properties).to_dict()
@@ -111,7 +120,7 @@ class ReportStream(Stream):
         with ThreadPoolExecutor(max_workers=5) as executor:
             tasks = []
             for start_date, end_date in get_iterator(
-                    self.config, self._report
+                self.config, self._report
             ).iterate():
                 tasks.append(
                     executor.submit(
