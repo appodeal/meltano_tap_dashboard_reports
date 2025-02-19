@@ -22,11 +22,15 @@ class PeriodDefault:
 
         if config.get("end_date"):
             self._end_date = parse(config.get("end_date"))
+        elif report_config.get("end_date"):
+            self._end_date = parse(report_config.get("end_date"))
         else:
             self._end_date = datetime.now()
 
         if config.get("start_date"):
             self._start_date = parse(config.get("start_date"))
+        elif report_config.get("start_date"):
+            self._start_date = parse(report_config.get("start_date"))
         else:
             self._start_date = self._calculate_start_date()
 
