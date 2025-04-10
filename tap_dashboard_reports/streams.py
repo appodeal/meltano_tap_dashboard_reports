@@ -1,5 +1,4 @@
 import json
-import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from singer_sdk import typing as th
