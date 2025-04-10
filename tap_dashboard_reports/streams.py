@@ -1,4 +1,5 @@
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from singer_sdk import typing as th
@@ -16,6 +17,10 @@ class ReportStream(Stream):
         self._custom_key = self._report.get("key_property", None)
         self._take_ids = self._report.get("take_ids", [])
         self._schema = self._report.get("schema", {})
+        # explode is a dictionary of dimension name and list of fields to explode
+        self._explode = self._report.get("explode", {})
+        # skip_primary_keys is a list of fields to skip from primary keys
+        self._skip_primary_keys = self._report.get("skip_primary_keys", [])
         self._dimensions = list(
             map(
                 lambda v: v["dimension"].lower(),
@@ -39,6 +44,10 @@ class ReportStream(Stream):
             dimension = dimension["dimension"].lower()
             if dimension in self._take_ids:
                 dimensions.append(f"{dimension}_id")
+            if dimension in self._explode:
+                for explode_field in self._explode[dimension]:
+                    dimensions.append(f"{dimension}_{explode_field}")
+                continue
             dimensions.append(dimension)
         return dimensions
 
@@ -63,8 +72,11 @@ class ReportStream(Stream):
         """
 
         if self._custom_key is not None:
-            return [*self.dimensions_with_ids, self._custom_key]
-        return self.dimensions_with_ids
+            p_keys = [*self.dimensions_with_ids, self._custom_key]
+        else:
+            p_keys = self.dimensions_with_ids
+
+        return [key for key in p_keys if key not in self._skip_primary_keys]
 
     # @property
     # def replication_key(self):
@@ -98,9 +110,18 @@ class ReportStream(Stream):
         # indexes of columns that should be taken from id
         ids_indexes = [self.fields.index(x) for x in self._take_ids]
 
+        # explode_indexes = [self.fields.index(x) for x in self._explode.keys()]
+        explode_indexes_map = {
+            self.fields.index(x): self._explode[x] for x in self._explode.keys()
+        }
+
         for row in data:
             values = []
             for cell_index, cell in enumerate(row):
+                if cell_index in explode_indexes_map:
+                    for explode_field in explode_indexes_map[cell_index]:
+                        values.append(cell.get(explode_field))
+                    continue
                 if cell_index in ids_indexes:
                     values.append(cell.get("id"))
                 values.append(cell.get("value") or cell.get("name"))
